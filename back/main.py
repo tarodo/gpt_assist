@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-3.5-turbo-1106")
+
 # Initialize clients with API keys
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 tavily_client = TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
