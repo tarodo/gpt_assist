@@ -1,17 +1,25 @@
 import os
 import json
 import time
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 from openai.types.beta.threads import RequiredActionFunctionToolCall
 from tavily import TavilyClient
 from dotenv import load_dotenv
 
-from back.assistant_conf import assistant_description, assistant_prompt_instruction
+from assistant_conf import assistant_description, assistant_prompt_instruction
 
 load_dotenv()
 OPENAI_CLIENT = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-3.5-turbo-1106")
 TAVILY_CLIENT = TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
+
+
+def retrieve_assistant(client: OpenAI, assistant_id: str):
+    return client.beta.assistants.retrieve(assistant_id=assistant_id)
+
+
+async def async_retrieve_assistant(client: AsyncOpenAI, assistant_id: str):
+    return await client.beta.assistants.retrieve(assistant_id=assistant_id)
 
 
 def create_assistant(client: OpenAI, description: str, prompt_instruction: str):
