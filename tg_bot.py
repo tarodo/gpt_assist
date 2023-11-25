@@ -146,12 +146,12 @@ async def async_wait_for_run_completion(
         run = await client.beta.threads.runs.retrieve(
             thread_id=thread_id, run_id=run_id
         )
-        await send_status(status_message, run.status, status_cnt)
         if run.status == cur_status:
             status_cnt += 1
         else:
             cur_status = run.status
             status_cnt = 0
+        await send_status(status_message, run.status, status_cnt)
         if run.status in ["completed", "failed", "requires_action"]:
             return run
 
@@ -204,7 +204,7 @@ async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     msg = await get_last_message(client, thread_id)
     msg = msg.content[0].text.value
     msg = escape_characters(msg)
-    await status_message.edit_text(f"{msg}", parse_mode=ParseMode.MARKDOWN_V2)
+    await status_message.edit_text(msg, parse_mode=ParseMode.MARKDOWN_V2)
 
 
 def main() -> None:
