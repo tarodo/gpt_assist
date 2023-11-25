@@ -4,14 +4,15 @@ import logging
 import os
 import sqlite3
 
+from dotenv import load_dotenv
 from openai import AsyncOpenAI, BadRequestError
 from openai.types.beta.threads import RequiredActionFunctionToolCall
 from telegram import Update
 from telegram.constants import ParseMode
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
-from dotenv import load_dotenv
+from telegram.ext import (Application, CommandHandler, ContextTypes,
+                          MessageHandler, filters)
 
-from gpt import tavily_search, TAVILY_CLIENT, get_last_message
+from gpt import TAVILY_CLIENT, get_last_message, tavily_search
 
 load_dotenv()
 
@@ -21,22 +22,25 @@ logging.basicConfig(
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
-conn = sqlite3.connect('tg_gpt_assist.db')
+conn = sqlite3.connect("tg_gpt_assist.db")
 
 
 def db_read_thread_id(user_id: int):
     cursor = conn.cursor()
-    cursor.execute('SELECT thread_id FROM user_threads WHERE user_id = ?', (user_id,))
+    cursor.execute("SELECT thread_id FROM user_threads WHERE user_id = ?", (user_id,))
     result = cursor.fetchone()
     return result[0] if result else None
 
 
 def db_write_thread_id(user_id: int, thread_id: str):
     cursor = conn.cursor()
-    cursor.execute('''
+    cursor.execute(
+        """
         INSERT INTO user_threads (user_id, thread_id) VALUES (?, ?)
         ON CONFLICT(user_id) DO UPDATE SET thread_id = excluded.thread_id;
-    ''', (user_id, thread_id))
+    """,
+        (user_id, thread_id),
+    )
     conn.commit()
 
 
@@ -81,9 +85,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
     user = update.effective_user
     await renew_thread(TGOpenAI.get_client(), user.id, context.user_data)
-    await update.message.reply_html(
-        rf"Hi {user.mention_html()}! !"
-    )
+    await update.message.reply_html(rf"Hi {user.mention_html()}! !")
 
 
 def create_tool_outputs(tools_to_call: list[RequiredActionFunctionToolCall]):
@@ -95,7 +97,9 @@ def create_tool_outputs(tools_to_call: list[RequiredActionFunctionToolCall]):
         function_args = tool.function.arguments
 
         if function_name == "tavily_search":
-            output = tavily_search(TAVILY_CLIENT, query=json.loads(function_args)["query"])
+            output = tavily_search(
+                TAVILY_CLIENT, query=json.loads(function_args)["query"]
+            )
 
         if output:
             tool_output_array.append({"tool_call_id": tool_call_id, "output": output})
@@ -104,16 +108,18 @@ def create_tool_outputs(tools_to_call: list[RequiredActionFunctionToolCall]):
 
 def escape_characters(text: str) -> str:
     """Screen characters for Markdown V2"""
-    text = text.replace('\\', '')
-    text = text.replace('**', '*')
+    text = text.replace("\\", "")
+    text = text.replace("**", "*")
 
-    characters = ['.', '+', '(', ')', '-', '_', "!", ">", "<"]
+    characters = [".", "+", "(", ")", "-", "_", "!", ">", "<"]
     for character in characters:
-        text = text.replace(character, f'\{character}')
+        text = text.replace(character, f"\{character}")
     return text
 
 
-async def send_status(status_message, status: str, status_cnt: int = 0, desc: str = None):
+async def send_status(
+    status_message, status: str, status_cnt: int = 0, desc: str = None
+):
     answers = {
         "start": "Starting run",
         "in_progress": "In progress",
@@ -130,25 +136,31 @@ async def send_status(status_message, status: str, status_cnt: int = 0, desc: st
     return status_message
 
 
-async def async_wait_for_run_completion(client: AsyncOpenAI, thread_id: str, run_id: str, status_message):
+async def async_wait_for_run_completion(
+    client: AsyncOpenAI, thread_id: str, run_id: str, status_message
+):
     cur_status = "in_progress"
     status_cnt = 0
     while True:
         await asyncio.sleep(1)
-        run = await client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
+        run = await client.beta.threads.runs.retrieve(
+            thread_id=thread_id, run_id=run_id
+        )
         await send_status(status_message, run.status, status_cnt)
         if run.status == cur_status:
             status_cnt += 1
         else:
             cur_status = run.status
             status_cnt = 0
-        if run.status in ['completed', 'failed', 'requires_action']:
+        if run.status in ["completed", "failed", "requires_action"]:
             return run
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    msg = ("Sorry, I have some problems to answer your question. "
-           "Please try again later or start new chat with /start command.")
+    msg = (
+        "Sorry, I have some problems to answer your question. "
+        "Please try again later or start new chat with /start command."
+    )
     await update.message.reply_text(msg)
 
 
@@ -179,15 +191,13 @@ async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     status_message = await send_status(update.message, "start", -1)
 
     run = await async_wait_for_run_completion(client, thread_id, run.id, status_message)
-    if run.status == 'failed':
+    if run.status == "failed":
         await send_status(status_message, "error", desc=run.last_error.message)
-    elif run.status == 'requires_action':
+    elif run.status == "requires_action":
         actions = run.required_action.submit_tool_outputs.tool_calls
         tool_output = create_tool_outputs(actions)
         run = await client.beta.threads.runs.submit_tool_outputs(
-            thread_id=thread_id,
-            run_id=run.id,
-            tool_outputs=tool_output
+            thread_id=thread_id, run_id=run.id, tool_outputs=tool_output
         )
         await async_wait_for_run_completion(client, thread_id, run.id, status_message)
 
@@ -203,19 +213,23 @@ def main() -> None:
 
     application.add_handler(CommandHandler("start", start))
 
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ask_question))
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, ask_question)
+    )
 
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 def init_db():
     cursor = conn.cursor()
-    cursor.execute('''
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS user_threads (
             user_id INT PRIMARY KEY,
             thread_id TEXT
         )
-    ''')
+    """
+    )
     conn.commit()
 
 

@@ -1,12 +1,12 @@
-import asyncio
-import os
 import json
+import os
 import time
-from openai import OpenAI, AsyncOpenAI
+
+from dotenv import load_dotenv
+from openai import AsyncOpenAI, OpenAI
 from openai.pagination import AsyncCursorPage
 from openai.types.beta.threads import RequiredActionFunctionToolCall
 from tavily import TavilyClient
-from dotenv import load_dotenv
 
 from assistant_conf import assistant_description, assistant_prompt_instruction
 
@@ -29,22 +29,27 @@ def create_assistant(client: OpenAI, description: str, prompt_instruction: str):
         instructions=prompt_instruction,
         description=description,
         model=OPENAI_MODEL,
-        tools=[{
-            "type": "function",
-            "function": {
-                "name": "tavily_search",
-                "description": "Get information on recent events from the web.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {"type": "string",
-                                  "description": "The search query to use. "
-                                                 "For example: 'Latest news of pySpark'"},
+        tools=[
+            {
+                "type": "function",
+                "function": {
+                    "name": "tavily_search",
+                    "description": "Get information on recent events from the web.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The search query to use. "
+                                "For example: 'Latest news of pySpark'",
+                            },
+                        },
+                        "required": ["query"],
                     },
-                    "required": ["query"]
-                }
-            }
-        }, {"type": "code_interpreter"}]
+                },
+            },
+            {"type": "code_interpreter"},
+        ],
     )
     print(f"Assistant ID: {assistant.id}")
     return assistant
@@ -57,7 +62,9 @@ def create_thread(client: OpenAI):
 
 
 def tavily_search(tavily_client: TavilyClient, query: str):
-    search_result = tavily_client.get_search_context(query, search_depth="advanced", max_tokens=8000)
+    search_result = tavily_client.get_search_context(
+        query, search_depth="advanced", max_tokens=8000
+    )
     return search_result
 
 
@@ -66,11 +73,13 @@ def wait_for_run_completion(thread_id: str, run_id: str):
         time.sleep(1)
         run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
         print(f"Current run status: {run.status}")
-        if run.status in ['completed', 'failed', 'requires_action']:
+        if run.status in ["completed", "failed", "requires_action"]:
             return run
 
 
-def submit_tool_outputs(thread_id: str, run_id: str, tools_to_call: list[RequiredActionFunctionToolCall]):
+def submit_tool_outputs(
+    thread_id: str, run_id: str, tools_to_call: list[RequiredActionFunctionToolCall]
+):
     tool_output_array = []
     for tool in tools_to_call:
         output = None
@@ -85,9 +94,7 @@ def submit_tool_outputs(thread_id: str, run_id: str, tools_to_call: list[Require
             tool_output_array.append({"tool_call_id": tool_call_id, "output": output})
 
     return client.beta.threads.runs.submit_tool_outputs(
-        thread_id=thread_id,
-        run_id=run_id,
-        tool_outputs=tool_output_array
+        thread_id=thread_id, run_id=run_id, tool_outputs=tool_output_array
     )
 
 
@@ -98,17 +105,21 @@ def print_messages_from_thread(thread_id):
 
 
 async def get_last_message(client, thread_id):
-    messages: AsyncCursorPage = await client.beta.threads.messages.list(thread_id=thread_id, order="desc")
+    messages: AsyncCursorPage = await client.beta.threads.messages.list(
+        thread_id=thread_id, order="desc"
+    )
     return messages.data[0]
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     client = OPENAI_CLIENT
-    assistant = create_assistant(client, assistant_description, assistant_prompt_instruction)
+    assistant = create_assistant(
+        client, assistant_description, assistant_prompt_instruction
+    )
     thread = create_thread(client)
     while True:
         user_input = input("You: ")
-        if user_input.lower() == 'exit':
+        if user_input.lower() == "exit":
             break
 
         # Create a message
@@ -128,10 +139,10 @@ if __name__ == '__main__':
         # Wait for run to complete
         run = wait_for_run_completion(thread.id, run.id)
 
-        if run.status == 'failed':
+        if run.status == "failed":
             print(run.error)
             continue
-        elif run.status == 'requires_action':
+        elif run.status == "requires_action":
             actions = run.required_action.submit_tool_outputs.tool_calls
             run = submit_tool_outputs(thread.id, run.id, actions)
             run = wait_for_run_completion(thread.id, run.id)
