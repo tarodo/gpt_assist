@@ -1,31 +1,46 @@
-# Data Engineering Assistant Script
+# DataPilot Aide
 
-## Overview
-This script is designed to serve as an assistant for data engineers, focusing on building, maintaining, and optimizing data pipelines and architectures. It specializes in tools like PySpark, Airflow, MinIO, Impala, Greenplum, and DataIKU, requiring expertise in data processing, storage, and workflow orchestration. The script utilizes OpenAI and Tavily APIs to provide comprehensive assistance.
+## 🔍 Overview
+The **DataPilot Aide** is an innovative Telegram bot designed to facilitate interactive communication between users and an AI assistant. This bot leverages the capabilities of OpenAI's GPT models to provide users with intelligent and context-aware responses. It's a perfect blend of Telegram's user-friendly messaging platform and the advanced AI technology of OpenAI.
 
-## Features
-- **Professional Role Integration**: Recognizes the user as a data engineer with specializations in various data engineering tools.
-- **Project and Challenge Collaboration**: Offers strategies for efficient data flow and processing.
-- **Interest in Data Engineering Technologies**: Keeps the user updated on the latest trends in data engineering.
-- **Learning Style Adaptation**: Uses practical examples and workflow diagrams for explaining concepts.
-- **Analytical Problem-Solving**: Integrates data engineering logic with analytical reasoning for well-rounded solutions.
+## ✨ Features
+- 🛠️ **Professional Role Integration**: Recognizes the user as a data engineer with specializations in various data engineering tools.
+- 🤝 **Project and Challenge Collaboration**: Offers strategies for efficient data flow and processing.
+- 🚀 **Interest in Data Engineering Technologies**: Keeps the user updated on the latest trends in data engineering.
+- 📚 **Learning Style Adaptation**: Uses practical examples and workflow diagrams for explaining concepts.
+- 💡 **Analytical Problem-Solving**: Integrates data engineering logic with analytical reasoning for well-rounded solutions.
 
-## Requirements
-- Python 3.11
-- `openai` Python package
-- `tavily` Python package
-- `python-dotenv` package for environment variable management
+## 💻 Tech Features
+| Feature                          | Description |
+|----------------------------------|-------------|
+| **AI-Powered Conversations**     | Engage in seamless and intelligent dialogues with the AI assistant, powered by OpenAI's GPT models. |
+| **Persistent Context Management**| The bot maintains conversation context, ensuring continuity and relevance in interactions. |
+| **Dynamic Response Generation**  | Generates responses based on user queries, offering informative and contextually appropriate answers. |
+| **User-Specific Thread Management** | Manages individual threads for each user, ensuring personalized and uninterrupted conversations. |
+| **Real-Time Interaction**        | Designed to respond promptly, providing a smooth and engaging user experience. |
+| **Error Handling**               | Gracefully manages unexpected situations or errors, ensuring the bot remains operational and user-friendly. |
 
-## Installation
+## 🛠️ Behind the Scenes
+- **Database Integration**: Utilizes [SQLite](https://www.sqlite.org/index.html) for managing user-specific data, ensuring efficient and secure data handling.
+- **Asynchronous Operations**: Leverages Python's [asyncio](https://docs.python.org/3/library/asyncio.html) for non-blocking operations, enhancing performance and scalability.
+- **Robust Error Handling**: Implements [error handling mechanisms](https://vegibit.com/python-error-handling-best-practices/) to manage and respond to various exceptions gracefully.
+- **Markdown Support**: Supports [Markdown V2](https://core.telegram.org/bots/api#markdownv2-style) for formatting messages, making the responses more readable and engaging.
+- **Environment Variable Management**: Uses environment variables for configuration, ensuring security and flexibility through tools like [dotenv](https://pypi.org/project/python-dotenv/).
+
+## 📋 Requirements
+- [Docker Compose](https://docs.docker.com/compose/install/)
+
+## 📥 Installation
 1. Clone the repository or download the script.
-2. Start a virtual environment: `python -m venv venv`
-3. Install required Python packages: `pip install -r requirements.txt`
-4. Set up your `.env` file with:
+2. Set up your `.env` file with:
    - `OPENAI_API_KEY`: (required) [OpenAI API key](https://platform.openai.com/api-keys)
    - `TAVILY_API_KEY`: (required) [Tavily API key](https://app.tavily.com/home)
    - `OPENAI_MODEL`: [OpenAI model ID](https://platform.openai.com/docs/models/overview)
+   - `ASSISTANT_ID`: (required) [GPT Assistant](https://platform.openai.com/assistants)
+   - `TELEGRAM_TOKEN`: (required) [Telegram bot token](https://t.me/BotFather)
 
-## Usage
-1. Run the script: `python main.py`
-2. Interact with the assistant through the command line interface.
-3. Type `exit` to end the session.
+## 👩‍💻 Usage
+1. Run the script: 
+   ```shell
+   docker-compose up -d
+   ```
