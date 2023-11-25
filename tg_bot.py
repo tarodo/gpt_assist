@@ -1,13 +1,19 @@
 import asyncio
+import json
 import logging
 import os
 import sqlite3
 
-from openai import OpenAI, AsyncOpenAI
-from telegram import ForceReply, Update, User
+from openai import AsyncOpenAI, BadRequestError
+from openai.types.beta.threads import RequiredActionFunctionToolCall
+from telegram import Update
+from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from dotenv import load_dotenv
 
-from gpt import retrieve_assistant, async_retrieve_assistant
+from gpt import tavily_search, TAVILY_CLIENT, get_last_message
+
+load_dotenv()
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -35,8 +41,8 @@ def db_write_thread_id(user_id: int, thread_id: str):
 
 
 class TGOpenAI:
-    _client = None
-    _assist = None
+    _client: AsyncOpenAI = None
+    assist_id: str = os.environ["ASSISTANT_ID"]
 
     @classmethod
     def get_client(cls, api_key=None, *args, **kwargs):
@@ -45,22 +51,6 @@ class TGOpenAI:
         if cls._client is None:
             cls._client = AsyncOpenAI(api_key=api_key)
         return cls._client
-
-    @classmethod
-    async def get_assist(cls, assist_id=None, *args, **kwargs):
-        if assist_id is None:
-            assist_id = os.environ["ASSISTANT_ID"]
-        if cls._assist is None:
-            cls._assist = await cls._client.beta.assistants.retrieve(assistant_id=assist_id)
-        return cls._assist
-
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a message when the command /start is issued."""
-    user = update.effective_user
-    await update.message.reply_html(
-        rf"Hi {user.mention_html()}! !"
-    )
 
 
 async def create_thread(client: AsyncOpenAI) -> str:
@@ -72,10 +62,8 @@ async def create_thread(client: AsyncOpenAI) -> str:
 async def retrieve_thread_id(client: AsyncOpenAI, user_id: int, user_data) -> str:
     """Retrieve a thread."""
     thread_id = user_data.get("thread_id")
-    logger.warning(f"thread_id: {thread_id}")
     if not thread_id:
         thread_id = db_read_thread_id(user_id)
-        logger.warning(f"db_thread_id: {thread_id}")
         if not thread_id:
             thread_id = await create_thread(client)
             db_write_thread_id(user_id, thread_id)
@@ -83,22 +71,130 @@ async def retrieve_thread_id(client: AsyncOpenAI, user_id: int, user_data) -> st
     return thread_id
 
 
+async def renew_thread(client: AsyncOpenAI, user_id: int, user_data):
+    new_thread_id = await create_thread(client)
+    db_write_thread_id(user_id, new_thread_id)
+    user_data["thread_id"] = new_thread_id
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send a message when the command /start is issued."""
+    user = update.effective_user
+    await renew_thread(TGOpenAI.get_client(), user.id, context.user_data)
+    await update.message.reply_html(
+        rf"Hi {user.mention_html()}! !"
+    )
+
+
+def create_tool_outputs(tools_to_call: list[RequiredActionFunctionToolCall]):
+    tool_output_array = []
+    for tool in tools_to_call:
+        output = None
+        tool_call_id = tool.id
+        function_name = tool.function.name
+        function_args = tool.function.arguments
+
+        if function_name == "tavily_search":
+            output = tavily_search(TAVILY_CLIENT, query=json.loads(function_args)["query"])
+
+        if output:
+            tool_output_array.append({"tool_call_id": tool_call_id, "output": output})
+    return tool_output_array
+
+
+def escape_characters(text: str) -> str:
+    """Screen characters for Markdown V2"""
+    text = text.replace('\\', '')
+    text = text.replace('**', '*')
+
+    characters = ['.', '+', '(', ')', '-', '_', "!", ">", "<"]
+    for character in characters:
+        text = text.replace(character, f'\{character}')
+    return text
+
+
+async def send_status(status_message, status: str, status_cnt: int = 0, desc: str = None):
+    answers = {
+        "start": "Starting run",
+        "in_progress": "In progress",
+        "requires_action": "Searching in Internet",
+        "completed": "Completed",
+        "error": "Error",
+    }
+    msg = f">>> *Status* :: {answers.get(status, 'Waiting')}{'.' * status_cnt}{f' :: {desc}' if desc else ''}"
+    msg = escape_characters(msg)
+    if status_cnt == -1:
+        status_message = await status_message.reply_markdown_v2(msg)
+    else:
+        await status_message.edit_text(msg, parse_mode=ParseMode.MARKDOWN_V2)
+    return status_message
+
+
+async def async_wait_for_run_completion(client: AsyncOpenAI, thread_id: str, run_id: str, status_message):
+    cur_status = "in_progress"
+    status_cnt = 0
+    while True:
+        await asyncio.sleep(1)
+        run = await client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
+        await send_status(status_message, run.status, status_cnt)
+        if run.status == cur_status:
+            status_cnt += 1
+        else:
+            cur_status = run.status
+            status_cnt = 0
+        if run.status in ['completed', 'failed', 'requires_action']:
+            return run
+
+
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    msg = ("Sorry, I have some problems to answer your question. "
+           "Please try again later or start new chat with /start command.")
+    await update.message.reply_text(msg)
+
+
 async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Echo the user message."""
     query = update.message.text
+    client = TGOpenAI.get_client()
+    assist_id = TGOpenAI.assist_id
     user_id = update.effective_user.id
     user_data = context.user_data
-    thread_id = await retrieve_thread_id(TGOpenAI.get_client(), user_id, user_data)
+    thread_id = await retrieve_thread_id(client, user_id, user_data)
+    try:
+        await client.beta.threads.messages.create(
+            thread_id=thread_id,
+            role="user",
+            content=query,
+        )
+    except BadRequestError as e:
+        logger.error(e)
+        await error_handler(update, context)
+        return
 
-    await update.message.reply_text(f"Your thread_id is {thread_id}")
+    run = await client.beta.threads.runs.create(
+        thread_id=thread_id,
+        assistant_id=assist_id,
+    )
 
+    status_message = await send_status(update.message, "start", -1)
 
-async def async_setup():
-    """Asynchronous setup for the bot."""
-    client = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
-    assist_id = os.environ.get("ASSISTANT_ID")
-    assistant = await async_retrieve_assistant(client, assist_id)
-    return assistant
+    run = await async_wait_for_run_completion(client, thread_id, run.id, status_message)
+    if run.status == 'failed':
+        await send_status(status_message, "error", desc=run.last_error.message)
+    elif run.status == 'requires_action':
+        actions = run.required_action.submit_tool_outputs.tool_calls
+        tool_output = create_tool_outputs(actions)
+        run = await client.beta.threads.runs.submit_tool_outputs(
+            thread_id=thread_id,
+            run_id=run.id,
+            tool_outputs=tool_output
+        )
+        await async_wait_for_run_completion(client, thread_id, run.id, status_message)
+
+    msg = await get_last_message(client, thread_id)
+    msg = msg.content[0].text.value
+    msg = escape_characters(msg)
+    await status_message.edit_text(f"{msg}", parse_mode=ParseMode.MARKDOWN_V2)
 
 
 def main() -> None:

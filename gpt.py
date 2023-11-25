@@ -1,7 +1,9 @@
+import asyncio
 import os
 import json
 import time
 from openai import OpenAI, AsyncOpenAI
+from openai.pagination import AsyncCursorPage
 from openai.types.beta.threads import RequiredActionFunctionToolCall
 from tavily import TavilyClient
 from dotenv import load_dotenv
@@ -93,6 +95,11 @@ def print_messages_from_thread(thread_id):
     messages = client.beta.threads.messages.list(thread_id=thread_id)
     for msg in messages:
         print(f"{msg.role}: {msg.content[0].text.value}")
+
+
+async def get_last_message(client, thread_id):
+    messages: AsyncCursorPage = await client.beta.threads.messages.list(thread_id=thread_id, order="desc")
+    return messages.data[0]
 
 
 if __name__ == '__main__':
