@@ -1,8 +1,7 @@
 # DataPilot Aide
 
 ## 🔍 Overview
-The **DataPilot Aide** is an innovative Telegram bot designed to facilitate interactive communication between users and an AI assistant. This bot leverages the capabilities of OpenAI's GPT models to provide users with intelligent and context-aware responses. It's a perfect blend of Telegram's user-friendly messaging platform and the advanced AI technology of OpenAI.
-
+**DataPilot Aide** is a dynamic partner for data engineers, analysts, and data scientists; and it's more than just a bot. Powered by OpenAI's GPT models, it offers an intuitive and intelligent helping hand, transforming complex data queries into clear insights. This bot is a fusion of Telegram's seamless interface and cutting-edge AI, making it a go-to resource for quick, accurate, and context-aware assistance. Whether it's guiding through intricate data challenges or offering analysis support, DataPilot Aide is designed to energize and streamline the workflow of data professionals, bringing a touch of AI brilliance to every interaction.
 ## ✨ Features
 - 🛠️ **Professional Role Integration**: Recognizes the user as a data engineer with specializations in various data engineering tools.
 - 🤝 **Project and Challenge Collaboration**: Offers strategies for efficient data flow and processing.

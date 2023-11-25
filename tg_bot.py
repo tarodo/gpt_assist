@@ -88,9 +88,16 @@ async def renew_thread(client: AsyncOpenAI, user_id: int, user_data):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the /start command in Telegram."""
+    msg = (
+        "👋 **Welcome to DataPilot Aide!**\n\n"
+        "I'm your AI assistant, ready to help with your data engineering queries. "
+        "Just type your question, and I'll provide insights and updates on the go!\n\n"
+        "Powered by OpenAI's GPT, I'm here to make your data engineering journey smoother. Let's get started! 🚀"
+    )
     user = update.effective_user
     await renew_thread(TGOpenAI.get_client(), user.id, context.user_data)
-    await update.message.reply_html(rf"Hi {user.mention_html()}! !")
+    msg = escape_characters(msg)
+    await update.message.reply_markdown_v2(msg)
 
 
 def create_tool_outputs(tools_to_call: list[RequiredActionFunctionToolCall]):
@@ -130,9 +137,9 @@ async def send_status(
     answers = {
         "start": "Starting run",
         "in_progress": "In progress",
-        "requires_action": "Searching in Internet",
+        "requires_action": "Searching the Internet",
         "completed": "Completed",
-        "error": "Error",
+        "error": "Error Encountered",
     }
     msg = f">>> *Status* :: {answers.get(status, 'Waiting')}{'.' * status_cnt}{f' :: {desc}' if desc else ''}"
     msg = escape_characters(msg)
