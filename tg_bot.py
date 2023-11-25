@@ -26,6 +26,7 @@ conn = sqlite3.connect("tg_gpt_assist.db")
 
 
 def db_read_thread_id(user_id: int):
+    """Read thread ID from the database for a given user ID."""
     cursor = conn.cursor()
     cursor.execute("SELECT thread_id FROM user_threads WHERE user_id = ?", (user_id,))
     result = cursor.fetchone()
@@ -33,6 +34,7 @@ def db_read_thread_id(user_id: int):
 
 
 def db_write_thread_id(user_id: int, thread_id: str):
+    """Write thread ID to the database for a given user ID."""
     cursor = conn.cursor()
     cursor.execute(
         """
@@ -45,11 +47,13 @@ def db_write_thread_id(user_id: int, thread_id: str):
 
 
 class TGOpenAI:
+    """Class to manage the OpenAI client instance."""
     _client: AsyncOpenAI = None
     assist_id: str = os.environ["ASSISTANT_ID"]
 
     @classmethod
     def get_client(cls, api_key=None, *args, **kwargs):
+        """Get or create an OpenAI client instance."""
         if api_key is None:
             api_key = os.environ["OPENAI_API_KEY"]
         if cls._client is None:
@@ -58,13 +62,13 @@ class TGOpenAI:
 
 
 async def create_thread(client: AsyncOpenAI) -> str:
-    """Create a thread."""
+    """Create a new thread using the OpenAI client."""
     thread = await client.beta.threads.create()
     return thread.id
 
 
 async def retrieve_thread_id(client: AsyncOpenAI, user_id: int, user_data) -> str:
-    """Retrieve a thread."""
+    """Retrieve or create a thread ID for a user."""
     thread_id = user_data.get("thread_id")
     if not thread_id:
         thread_id = db_read_thread_id(user_id)
@@ -76,19 +80,21 @@ async def retrieve_thread_id(client: AsyncOpenAI, user_id: int, user_data) -> st
 
 
 async def renew_thread(client: AsyncOpenAI, user_id: int, user_data):
+    """Renew the thread for a user."""
     new_thread_id = await create_thread(client)
     db_write_thread_id(user_id, new_thread_id)
     user_data["thread_id"] = new_thread_id
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a message when the command /start is issued."""
+    """Handle the /start command in Telegram."""
     user = update.effective_user
     await renew_thread(TGOpenAI.get_client(), user.id, context.user_data)
     await update.message.reply_html(rf"Hi {user.mention_html()}! !")
 
 
 def create_tool_outputs(tools_to_call: list[RequiredActionFunctionToolCall]):
+    """Create outputs for required action function tool calls."""
     tool_output_array = []
     for tool in tools_to_call:
         output = None
@@ -107,7 +113,7 @@ def create_tool_outputs(tools_to_call: list[RequiredActionFunctionToolCall]):
 
 
 def escape_characters(text: str) -> str:
-    """Screen characters for Markdown V2"""
+    """Escape characters for Markdown V2 formatting."""
     text = text.replace("\\", "")
     text = text.replace("**", "*")
 
@@ -120,6 +126,7 @@ def escape_characters(text: str) -> str:
 async def send_status(
     status_message, status: str, status_cnt: int = 0, desc: str = None
 ):
+    """Send or update a status message."""
     answers = {
         "start": "Starting run",
         "in_progress": "In progress",
@@ -139,6 +146,7 @@ async def send_status(
 async def async_wait_for_run_completion(
     client: AsyncOpenAI, thread_id: str, run_id: str, status_message
 ):
+    """Wait for the completion of a run and update the status message accordingly."""
     cur_status = "in_progress"
     status_cnt = 0
     while True:
@@ -157,6 +165,7 @@ async def async_wait_for_run_completion(
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle errors and inform the user."""
     msg = (
         "Sorry, I have some problems to answer your question. "
         "Please try again later or start new chat with /start command."
@@ -165,7 +174,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Echo the user message."""
+    """Handle user queries and provide responses."""
     query = update.message.text
     client = TGOpenAI.get_client()
     assist_id = TGOpenAI.assist_id
@@ -208,6 +217,7 @@ async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 def main() -> None:
+    """Main function to start the bot."""
     bot_token = os.environ.get("TG_TOKEN")
     application = Application.builder().token(bot_token).build()
 
@@ -221,6 +231,7 @@ def main() -> None:
 
 
 def init_db():
+    """Initialize the database."""
     cursor = conn.cursor()
     cursor.execute(
         """
