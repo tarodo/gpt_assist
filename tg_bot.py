@@ -156,16 +156,19 @@ async def async_wait_for_run_completion(
     """Wait for the completion of a run and update the status message accordingly."""
     cur_status = "in_progress"
     status_cnt = 0
+    direction = 1
     while True:
         await asyncio.sleep(1)
         run = await client.beta.threads.runs.retrieve(
             thread_id=thread_id, run_id=run_id
         )
         if run.status == cur_status:
-            status_cnt += 1
+            status_cnt += 1 * direction
         else:
             cur_status = run.status
-            status_cnt = 0
+            status_cnt = 1
+        if status_cnt == 5 or status_cnt == 0:
+            direction *= -1
         await send_status(status_message, run.status, status_cnt)
         if run.status in ["completed", "failed", "requires_action"]:
             return run
