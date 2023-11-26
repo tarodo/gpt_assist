@@ -6,6 +6,8 @@ import sqlite3
 
 from dotenv import load_dotenv
 from openai import AsyncOpenAI, BadRequestError
+from telegram.error import BadRequest as TelegramBadRequestError
+
 from openai.types.beta.threads import RequiredActionFunctionToolCall
 from telegram import Update
 from telegram.constants import ParseMode
@@ -223,7 +225,11 @@ async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     msg = await get_last_message(client, thread_id)
     msg = msg.content[0].text.value
     msg = escape_characters(msg)
-    await status_message.edit_text(msg, parse_mode=ParseMode.MARKDOWN_V2)
+    try:
+        await status_message.edit_text(msg, parse_mode=ParseMode.MARKDOWN_V2)
+    except TelegramBadRequestError as e:
+        logger.error(e)
+        await status_message.edit_text(msg)
 
 
 def main() -> None:
