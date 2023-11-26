@@ -126,7 +126,7 @@ def escape_characters(text: str) -> str:
     text = text.replace("\\", "")
     text = text.replace("**", "*")
 
-    characters = [".", "+", "(", ")", "-", "_", "!", ">", "<"]
+    characters = [".", "+", "(", ")", "-", "_", "!", ">", "<", "#", "=", "|", "{", "}"]
     for character in characters:
         text = text.replace(character, f"\{character}")
     return text
@@ -230,6 +230,13 @@ async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     except TelegramBadRequestError as e:
         logger.error(e)
         await status_message.edit_text(msg)
+
+
+async def symbols_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    symbols = "! @ # $ % ^ & ( ) _ + - = { } [ ] |  :  ; ' < > , . ? /"
+    specials = "` * ~"
+    msg = escape_characters(symbols)
+    await update.message.reply_markdown_v2(msg)
 
 
 def main() -> None:
