@@ -199,7 +199,7 @@ async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             role="user",
             content=query,
         )
-    except BadRequestError as e:
+    except Exception as e:
         logger.error(e)
         await error_handler(update, context)
         return
