@@ -24,28 +24,28 @@ logging.basicConfig(
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
-conn = sqlite3.connect("tg_gpt_assist.db")
-
 
 def db_read_thread_id(user_id: int):
     """Read thread ID from the database for a given user ID."""
-    cursor = conn.cursor()
-    cursor.execute("SELECT thread_id FROM user_threads WHERE user_id = ?", (user_id,))
-    result = cursor.fetchone()
-    return result[0] if result else None
+    with sqlite3.connect("tg_gpt_assist.db") as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT thread_id FROM user_threads WHERE user_id = ?", (user_id,))
+        result = cursor.fetchone()
+        return result[0] if result else None
 
 
 def db_write_thread_id(user_id: int, thread_id: str):
     """Write thread ID to the database for a given user ID."""
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        INSERT INTO user_threads (user_id, thread_id) VALUES (?, ?)
-        ON CONFLICT(user_id) DO UPDATE SET thread_id = excluded.thread_id;
-    """,
-        (user_id, thread_id),
-    )
-    conn.commit()
+    with sqlite3.connect("tg_gpt_assist.db") as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO user_threads (user_id, thread_id) VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET thread_id = excluded.thread_id;
+        """,
+            (user_id, thread_id),
+        )
+        conn.commit()
 
 
 class TGOpenAI:
@@ -133,7 +133,7 @@ def escape_characters(text: str) -> str:
 
 
 async def send_status(
-    status_message, status: str, status_cnt: int = 0, desc: str = None
+        status_message, status: str, status_cnt: int = 0, desc: str = None
 ):
     """Send or update a status message."""
     answers = {
@@ -153,7 +153,7 @@ async def send_status(
 
 
 async def async_wait_for_run_completion(
-    client: AsyncOpenAI, thread_id: str, run_id: str, status_message
+        client: AsyncOpenAI, thread_id: str, run_id: str, status_message
 ):
     """Wait for the completion of a run and update the status message accordingly."""
     cur_status = "in_progress"
@@ -185,6 +185,20 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.message.reply_text(msg)
 
 
+def db_write_chat_history(user_id: int, message: str, gpt_answer: str):
+    """Write chat history to the database for a given user ID."""
+    print(f"Writing to DB: {user_id}, {message}, {gpt_answer}")
+    with sqlite3.connect("tg_gpt_assist.db") as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO chat_history (user_id, message, gpt_answer) VALUES (?, ?, ?);
+        """,
+            (user_id, message, gpt_answer),
+        )
+        conn.commit()
+
+
 async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle user queries and provide responses."""
     query = update.message.text
@@ -214,6 +228,7 @@ async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     run = await async_wait_for_run_completion(client, thread_id, run.id, status_message)
     if run.status == "failed":
         await send_status(status_message, "error", desc=run.last_error.message)
+        return
     elif run.status == "requires_action":
         actions = run.required_action.submit_tool_outputs.tool_calls
         tool_output = create_tool_outputs(actions)
@@ -224,6 +239,7 @@ async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     msg = await get_last_message(client, thread_id)
     msg = msg.content[0].text.value
+    db_write_chat_history(user_id, query, msg)
     msg = escape_characters(msg)
     try:
         await status_message.edit_text(msg, parse_mode=ParseMode.MARKDOWN_V2)
@@ -240,7 +256,6 @@ async def symbols_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 def main() -> None:
-    """Main function to start the bot."""
     bot_token = os.environ.get("TG_TOKEN")
     application = Application.builder().token(bot_token).build()
 
@@ -255,16 +270,27 @@ def main() -> None:
 
 def init_db():
     """Initialize the database."""
-    cursor = conn.cursor()
-    cursor.execute(
+    with sqlite3.connect("tg_gpt_assist.db") as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_threads (
+                user_id INT PRIMARY KEY,
+                thread_id TEXT
+            )
         """
-        CREATE TABLE IF NOT EXISTS user_threads (
-            user_id INT PRIMARY KEY,
-            thread_id TEXT
         )
-    """
-    )
-    conn.commit()
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS chat_history (
+                user_id INT,
+                message TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                gpt_answer TEXT
+                )
+        """
+        )
+        conn.commit()
 
 
 if __name__ == "__main__":
